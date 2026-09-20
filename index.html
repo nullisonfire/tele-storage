@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Telegram Media Manager</title>
+    <script>
+      (function() {
+        try {
+          var desc = Object.getOwnPropertyDescriptor(window, 'fetch');
+          if (desc && !desc.writable && !desc.set) {
+            var _f = window.fetch;
+            Object.defineProperty(window, 'fetch', {
+              get: function() { return _f; },
+              set: function(val) { _f = val; },
+              configurable: true,
+              enumerable: true
+            });
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="description" content="Personal cloud media management system with Telegram authentication & approval, direct browser/Mini App media browsing, preview, upload sessions, and ZIP downloads." />
+    <meta property="og:title" content="Telegram Media Manager" />
+    <meta property="og:description" content="Personal cloud media management system with Telegram authentication & approval, direct browser/Mini App media browsing, preview, upload sessions, and ZIP downloads." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#2481cc" />
+    <!-- Telegram Mini App JavaScript API -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  </head>
+  <body class="bg-[#0f172a] text-slate-100 antialiased selection:bg-blue-500 selection:text-white overflow-x-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

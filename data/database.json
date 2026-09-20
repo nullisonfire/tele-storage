@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "directories": {
+    "/": {
+      "id": "dir-root",
+      "name": "/",
+      "path": "/",
+      "parent_path": null,
+      "created_at": 1789808877581,
+      "updated_at": 1789808877581,
+      "created_by": 0
+    }
+  },
+  "media": {},
+  "users": {},
+  "pending_access": {},
+  "favorites": [],
+  "tags": {},
+  "trash": {},
+  "sessions": {},
+  "audit_logs": []
+}

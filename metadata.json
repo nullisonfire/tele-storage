@@ -1,0 +1,6 @@
+{
+  "name": "Telegram Media Manager",
+  "description": "Personal cloud media management system with Telegram authentication & approval, direct browser/Mini App media browsing, preview, upload sessions, and ZIP downloads.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
