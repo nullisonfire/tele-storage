@@ -44,7 +44,7 @@ const ThumbnailStage: React.FC<{ file: MediaItem }> = ({ file }) => {
       <div className="w-full h-full bg-slate-950 flex items-center justify-center overflow-hidden">
         {!imgError ? (
           <img
-            src={`/api/media/${file.id}/thumbnail`}
+            src={`/api/media/${file.id}/preview`}
             alt={file.name}
             loading="lazy"
             onError={() => setImgError(true)}
