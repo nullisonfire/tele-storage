@@ -544,6 +544,105 @@ export class MtprotoService {
   }
 
   /**
+   * Send a media item immediately to a Telegram chat via MTProto session using its
+   * media_id, access_hash, and file_reference credentials.
+   */
+  public async sendMediaUsingMTProto(
+    media: MediaItem,
+    options?: {
+      targetChat?: string | number;
+      caption?: string;
+    }
+  ): Promise<{ success: boolean; messageId?: number; chat?: string; error?: string }> {
+    enrichTelegramMetadata(media.telegram);
+    const { media_id, access_hash, file_reference } = media.telegram;
+
+    if (!media_id || !access_hash) {
+      throw new Error(`Missing MTProto document credentials (media_id / access_hash) for ${media.name}`);
+    }
+
+    const client = await this.getClient();
+    this.touchActivity();
+
+    // Determine target peer
+    const target = options?.targetChat ?? config.telegram.storageGroupId ?? 'me';
+    let peer: any;
+    const targetStr = String(target).trim();
+    if (targetStr.toLowerCase() === 'me' || targetStr.toLowerCase() === 'self') {
+      peer = 'me';
+    } else if (/^-?\d+$/.test(targetStr)) {
+      peer = helpers.returnBigInt(targetStr);
+    } else {
+      peer = targetStr;
+    }
+
+    const fileRefBuffer = file_reference ? Buffer.from(file_reference, 'hex') : Buffer.alloc(0);
+    const caption = options?.caption ?? media.name;
+
+    logger.info(
+      {
+        mediaId: media.id,
+        name: media.name,
+        target: targetStr,
+        media_id,
+        access_hash,
+        hasFileReference: Boolean(file_reference),
+      },
+      'Sending media immediately via MTProto session'
+    );
+
+    // If media is an image (and not svg), try sending as photo first, with document fallback
+    const isImage = media.media_type === 'image' && !media.name.toLowerCase().endsWith('.svg');
+    let sentMessage: any;
+
+    if (isImage) {
+      try {
+        const inputPhoto = new Api.InputPhoto({
+          id: helpers.returnBigInt(media_id),
+          accessHash: helpers.returnBigInt(access_hash),
+          fileReference: fileRefBuffer,
+        });
+        sentMessage = await client.sendFile(peer, {
+          file: inputPhoto as any,
+          caption,
+        });
+      } catch (photoErr: any) {
+        logger.warn(
+          { photoErr: photoErr.message, mediaId: media.id },
+          'Photo send attempt failed, retrying with InputDocument'
+        );
+        const inputDoc = new Api.InputDocument({
+          id: helpers.returnBigInt(media_id),
+          accessHash: helpers.returnBigInt(access_hash),
+          fileReference: fileRefBuffer,
+        });
+        sentMessage = await client.sendFile(peer, {
+          file: inputDoc as any,
+          caption,
+        });
+      }
+    } else {
+      const inputDoc = new Api.InputDocument({
+        id: helpers.returnBigInt(media_id),
+        accessHash: helpers.returnBigInt(access_hash),
+        fileReference: fileRefBuffer,
+      });
+      sentMessage = await client.sendFile(peer, {
+        file: inputDoc as any,
+        caption,
+      });
+    }
+
+    this.touchActivity();
+
+    return {
+      success: true,
+      messageId: sentMessage?.id,
+      chat: targetStr,
+    };
+  }
+
+  /**
    * Explicitly disconnect the MTProto client immediately (e.g. during graceful server shutdown).
    */
   public async disconnect(): Promise<void> {

@@ -260,3 +260,37 @@ export async function unbanAccess(userId: number): Promise<any> {
   const res = await fetch(`/api/admin/access/${userId}/unban`, { method: 'POST' });
   return res.json();
 }
+
+// Telegram MTProto Sending APIs
+export async function sendMediaToTelegram(
+  id: string,
+  options?: { targetChat?: string | number; caption?: string }
+): Promise<{ success: boolean; messageId?: number; chat?: string; filename?: string; error?: string }> {
+  const res = await fetch(`/api/media/${id}/send-telegram`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(options || {}),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to send to Telegram');
+  }
+  return data;
+}
+
+export async function sendBatchToTelegram(
+  ids: string[],
+  options?: { targetChat?: string | number; captionPrefix?: string }
+): Promise<{ success: boolean; sentCount: number; totalCount: number; chat?: string; results: any[]; error?: string }> {
+  const res = await fetch('/api/media/send-telegram-batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids, ...options }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to send batch to Telegram');
+  }
+  return data;
+}
+

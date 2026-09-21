@@ -13,6 +13,7 @@ import {
   Table,
   Presentation,
   BookOpen,
+  Send,
 } from 'lucide-react';
 import { MediaItem } from '../types';
 import { getFilePreviewKind, PreviewKind } from './preview/previewTypes';
@@ -30,6 +31,7 @@ interface FileGridProps {
   onSelectAll: () => void;
   onClearSelection: () => void;
   onOpenFile: (file: MediaItem) => void;
+  onSendToTelegram?: (file: MediaItem) => void;
 }
 
 const ThumbnailStage: React.FC<{ file: MediaItem }> = ({ file }) => {
@@ -175,6 +177,7 @@ export const FileGrid: React.FC<FileGridProps> = ({
   onSelectAll,
   onClearSelection,
   onOpenFile,
+  onSendToTelegram,
 }) => {
   const isSelected = (id: string) => selectedIds.includes(id);
 
@@ -270,6 +273,18 @@ export const FileGrid: React.FC<FileGridProps> = ({
                     }`}
                   >
                     {selected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                  </button>
+
+                  {/* Send to Telegram button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSendToTelegram?.(file);
+                    }}
+                    className={`absolute top-2 ${file.is_favorite ? 'right-9' : 'right-2'} p-1.5 rounded-lg bg-black/60 hover:bg-sky-600 text-slate-300 hover:text-white backdrop-blur-md transition cursor-pointer z-10 opacity-0 group-hover:opacity-100`}
+                    title="Send to Telegram via MTProto"
+                  >
+                    <Send className="w-3.5 h-3.5" />
                   </button>
 
                   {/* Favorite indicator */}
@@ -369,7 +384,17 @@ export const FileGrid: React.FC<FileGridProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-right flex-shrink-0 text-xs text-slate-400">
+                <div className="flex items-center gap-3 text-right flex-shrink-0 text-xs text-slate-400">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSendToTelegram?.(file);
+                    }}
+                    className="p-1.5 rounded-lg hover:bg-sky-500/20 text-slate-400 hover:text-sky-400 transition cursor-pointer"
+                    title="Send to Telegram via MTProto"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
                   {file.is_favorite && <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />}
                   <div className="flex items-center gap-1.5">
                     <span className="font-mono">{formatSize(file.size)}</span>

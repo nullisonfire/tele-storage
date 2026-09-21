@@ -650,4 +650,82 @@ router.get('/:id/text', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/media/:id/send-telegram
+ * Send a single media item immediately via MTProto session
+ */
+router.post('/:id/send-telegram', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { targetChat, caption } = req.body;
+
+  const media = await mediaService.getMedia(id);
+  if (!media) {
+    res.status(404).json({ error: 'Media not found' });
+    return;
+  }
+
+  try {
+    const destinationChat = targetChat || req.user?.id || 'me';
+    const result = await mtprotoService.sendMediaUsingMTProto(media, {
+      targetChat: destinationChat,
+      caption: caption || media.name,
+    });
+
+    res.json({
+      success: true,
+      messageId: result.messageId,
+      chat: result.chat,
+      filename: media.name,
+    });
+  } catch (err: any) {
+    logger.error({ err: err.message, id, targetChat }, 'Failed to send media via MTProto');
+    res.status(500).json({ error: err.message || 'Failed to send media via MTProto session' });
+  }
+});
+
+/**
+ * POST /api/media/send-telegram-batch
+ * Send multiple selected media items immediately via MTProto session
+ */
+router.post('/send-telegram-batch', async (req: Request, res: Response) => {
+  const { ids, targetChat, captionPrefix } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'ids array is required' });
+    return;
+  }
+
+  const destinationChat = targetChat || req.user?.id || 'me';
+  const results: Array<{ id: string; name: string; success: boolean; messageId?: number; error?: string }> = [];
+
+  for (const id of ids) {
+    const media = await mediaService.getMedia(id);
+    if (!media) {
+      results.push({ id, name: id, success: false, error: 'Media item not found' });
+      continue;
+    }
+
+    try {
+      const caption = captionPrefix ? `${captionPrefix} - ${media.name}` : media.name;
+      const resSend = await mtprotoService.sendMediaUsingMTProto(media, {
+        targetChat: destinationChat,
+        caption,
+      });
+      results.push({ id, name: media.name, success: true, messageId: resSend.messageId });
+    } catch (err: any) {
+      logger.warn({ err: err.message, id, name: media.name }, 'Batch item send failed');
+      results.push({ id, name: media.name, success: false, error: err.message });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  res.json({
+    success: successCount > 0,
+    sentCount: successCount,
+    totalCount: ids.length,
+    results,
+    chat: String(destinationChat),
+  });
+});
+
 export default router;

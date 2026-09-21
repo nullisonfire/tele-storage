@@ -13,6 +13,7 @@ import {
   Info,
   FileText,
   Code2,
+  Send,
 } from 'lucide-react';
 import { MediaItem } from '../types';
 import { toggleFavorite, deleteFileItem, renameFile, moveFile } from '../clientApi';
@@ -25,6 +26,7 @@ import { CodePreview } from './preview/CodePreview';
 import { SpreadsheetPreview } from './preview/SpreadsheetPreview';
 import { DocxPreview } from './preview/DocxPreview';
 import { PptxPreview } from './preview/PptxPreview';
+import { SendToTelegramModal } from './SendToTelegramModal';
 
 interface MediaLightboxProps {
   file: MediaItem | null;
@@ -32,6 +34,7 @@ interface MediaLightboxProps {
   onClose: () => void;
   onRefresh: () => void;
   onSelectFile: (file: MediaItem) => void;
+  user?: any;
 }
 
 export const MediaLightbox: React.FC<MediaLightboxProps> = ({
@@ -40,6 +43,7 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({
   onClose,
   onRefresh,
   onSelectFile,
+  user,
 }) => {
   const [zoomLevel, setZoomLevel] = useState<number>(1);
   const [showInfo, setShowInfo] = useState<boolean>(false);
@@ -50,6 +54,7 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({
   const [newDirectory, setNewDirectory] = useState<string>('');
   const [previewError, setPreviewError] = useState<boolean>(false);
   const [forceTextMode, setForceTextMode] = useState<boolean>(false);
+  const [showSendTelegram, setShowSendTelegram] = useState<boolean>(false);
 
   useEffect(() => {
     if (file) {
@@ -438,11 +443,11 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({
 
       {/* Bottom Actions Bar */}
       <div className="p-3 sm:p-4 bg-gradient-to-t from-black/90 to-transparent flex flex-wrap items-center justify-center gap-2 sm:gap-3 z-10">
-        {/* Direct Download (Primary) */}
+        {/* Direct Download */}
         <a
           href={`/api/media/${file.id}/download`}
           download={file.name}
-          className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
+          className="px-3.5 sm:px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs sm:text-sm font-medium flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
           title={file.size > 20 * 1024 * 1024 ? 'Download via MTProto client (>20MB)' : 'Download via Bot API (<=20MB)'}
         >
           <Download className="w-4 h-4" />
@@ -453,6 +458,16 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({
             </span>
           )}
         </a>
+
+        {/* Send to Telegram via MTProto */}
+        <button
+          onClick={() => setShowSendTelegram(true)}
+          className="px-3.5 sm:px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-medium flex items-center gap-2 shadow-md transition active:scale-95 cursor-pointer"
+          title="Send to Telegram immediately via MTProto session"
+        >
+          <Send className="w-4 h-4" />
+          <span>Send to Telegram</span>
+        </button>
 
         {/* Rename Button */}
         <button
@@ -547,6 +562,16 @@ export const MediaLightbox: React.FC<MediaLightboxProps> = ({
             </form>
           </div>
         </div>
+      )}
+
+      {/* Send to Telegram Modal */}
+      {showSendTelegram && file && (
+        <SendToTelegramModal
+          isOpen={showSendTelegram}
+          onClose={() => setShowSendTelegram(false)}
+          files={[file]}
+          user={user}
+        />
       )}
     </div>
   );

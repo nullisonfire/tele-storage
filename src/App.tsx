@@ -25,7 +25,8 @@ import { FileGrid } from './components/FileGrid';
 import { MediaLightbox } from './components/MediaLightbox';
 import { UploadModal } from './components/UploadModal';
 import { AdminModal } from './components/AdminModal';
-import { Trash2, FolderInput, X, Archive, CheckCircle2 } from 'lucide-react';
+import { SendToTelegramModal } from './components/SendToTelegramModal';
+import { Trash2, FolderInput, X, Archive, CheckCircle2, Send } from 'lucide-react';
 
 export function App() {
   // Authentication & Session State
@@ -34,6 +35,10 @@ export function App() {
   const [user, setUser] = useState<any>(null);
   const [authState, setAuthState] = useState<string>('unauthorized');
   const [isMiniApp, setIsMiniApp] = useState<boolean>(false);
+
+  // Send to Telegram State
+  const [showSendTelegramModal, setShowSendTelegramModal] = useState<boolean>(false);
+  const [sendTelegramTargetFiles, setSendTelegramTargetFiles] = useState<MediaItem[]>([]);
 
   // File Manager State
   const [currentPath, setCurrentPath] = useState<string>('/');
@@ -442,6 +447,18 @@ export function App() {
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => {
+                const selected = files.filter((f) => selectedFileIds.includes(f.id));
+                setSendTelegramTargetFiles(selected);
+                setShowSendTelegramModal(true);
+              }}
+              className="px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-white font-medium flex items-center gap-1.5 cursor-pointer shadow-sm transition active:scale-95"
+              title="Send selected files via MTProto session"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Send to Telegram</span>
+            </button>
+            <button
               onClick={handleDownloadSelectedZip}
               disabled={downloadingZip}
               className="px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-800 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
@@ -503,6 +520,10 @@ export function App() {
               onSelectAll={handleSelectAll}
               onClearSelection={handleClearSelection}
               onOpenFile={(file) => setActiveLightboxFile(file)}
+              onSendToTelegram={(file) => {
+                setSendTelegramTargetFiles([file]);
+                setShowSendTelegramModal(true);
+              }}
             />
 
             {/* Pagination Controls */}
@@ -539,6 +560,7 @@ export function App() {
           onClose={() => setActiveLightboxFile(null)}
           onRefresh={loadDirectoryData}
           onSelectFile={(f) => setActiveLightboxFile(f)}
+          user={user}
         />
       )}
 
@@ -657,6 +679,19 @@ export function App() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* MTProto Send to Telegram Modal */}
+      {showSendTelegramModal && sendTelegramTargetFiles.length > 0 && (
+        <SendToTelegramModal
+          isOpen={showSendTelegramModal}
+          onClose={() => {
+            setShowSendTelegramModal(false);
+            setSendTelegramTargetFiles([]);
+          }}
+          files={sendTelegramTargetFiles}
+          user={user}
+        />
       )}
     </div>
   );
