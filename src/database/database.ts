@@ -6,6 +6,7 @@ export interface IDatabase {
   write<T>(mutator: (data: DatabaseSchema) => T | Promise<T>): Promise<T>;
   getRawData(): Promise<DatabaseSchema>;
   createBackup(): Promise<string>;
+  restoreDatabase(data: any): Promise<{ usersCount: number; mediaCount: number; directoriesCount: number }>;
 
   // User operations
   getUser(userId: number): Promise<UserRecord | null>;

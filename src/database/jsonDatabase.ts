@@ -129,6 +129,45 @@ export class JsonDatabase implements IDatabase {
     return backupFile;
   }
 
+  public async restoreDatabase(data: any): Promise<{ usersCount: number; mediaCount: number; directoriesCount: number }> {
+    await this.init();
+    if (!data || typeof data !== 'object') {
+      throw new Error('Invalid backup data format: expected a JSON object');
+    }
+
+    // Automatically create a safety backup before applying the restore
+    try {
+      await this.createBackup();
+    } catch (backupErr) {
+      logger.warn({ backupErr }, 'Could not create safety pre-restore backup');
+    }
+
+    // Migrate & sanitize data
+    const migrated = migrateDatabase(data);
+
+    // Apply atomically to memory and file
+    await this.write((db) => {
+      db.version = migrated.version;
+      db.users = migrated.users;
+      db.directories = migrated.directories;
+      db.media = migrated.media;
+      db.favorites = migrated.favorites;
+      db.recent_media = migrated.recent_media;
+      db.pinned_directories = migrated.pinned_directories;
+      // Note: sessions and upload_sessions can be preserved or merged
+      db.sessions = migrated.sessions || db.sessions;
+      db.upload_sessions = migrated.upload_sessions || db.upload_sessions;
+    });
+
+    const usersCount = Object.keys(migrated.users).length;
+    const mediaCount = Object.keys(migrated.media).length;
+    const directoriesCount = Object.keys(migrated.directories).length;
+
+    logger.info({ usersCount, mediaCount, directoriesCount }, 'Database successfully restored from JSON backup');
+
+    return { usersCount, mediaCount, directoriesCount };
+  }
+
   public async read<T>(selector: (data: DatabaseSchema) => T): Promise<T> {
     await this.init();
     return selector(this.memoryCache!);

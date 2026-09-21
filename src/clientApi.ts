@@ -261,6 +261,38 @@ export async function unbanAccess(userId: number): Promise<any> {
   return res.json();
 }
 
+export async function triggerDatabaseBackup(): Promise<{
+  success: boolean;
+  backupFile: string;
+  meta: { usersCount: number; mediaCount: number; directoriesCount: number; sizeBytes: number };
+  delivery: { sentTo: number[]; failed: number[] };
+  message: string;
+}> {
+  const res = await fetch('/api/admin/backup', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to create database backup');
+  }
+  return data;
+}
+
+export async function restoreDatabaseJson(databaseJson: string | object): Promise<{
+  success: boolean;
+  message: string;
+  result: { usersCount: number; mediaCount: number; directoriesCount: number };
+}> {
+  const res = await fetch('/api/admin/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ databaseJson }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to restore database');
+  }
+  return data;
+}
+
 // Telegram MTProto Sending APIs
 export async function sendMediaToTelegram(
   id: string,

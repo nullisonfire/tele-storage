@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, InputFile } from 'grammy';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { TelegramMediaMetadata } from '../types';
@@ -159,6 +159,50 @@ export class TelegramApiService {
     } catch (err) {
       logger.warn({ userId, err }, 'Could not notify user of status update');
     }
+  }
+
+  /**
+   * Send database backup file (JSON) to all configured admin Telegram user IDs.
+   */
+  public async sendDatabaseBackupToAdmins(
+    backupFilePath: string,
+    meta?: { usersCount: number; mediaCount: number; directoriesCount: number; sizeBytes: number }
+  ): Promise<{ sentTo: number[]; failed: number[] }> {
+    const bot = getTelegramBot();
+    const adminIds = config.telegram.adminIds;
+    const sentTo: number[] = [];
+    const failed: number[] = [];
+
+    if (!bot) {
+      throw new Error('Telegram bot is not initialized');
+    }
+
+    if (!adminIds || adminIds.length === 0) {
+      throw new Error('No admin Telegram IDs configured in ADMIN_IDS');
+    }
+
+    const caption =
+      `📦 *Database Backup Created*\n\n` +
+      `📅 *Date:* ${new Date().toUTCString()}\n` +
+      (meta ? `👥 *Users:* ${meta.usersCount}\n📁 *Directories:* ${meta.directoriesCount}\n📄 *Files:* ${meta.mediaCount}\n💾 *Size:* ${(meta.sizeBytes / 1024).toFixed(1)} KB\n\n` : '') +
+      `_Keep this JSON safe. You can restore this backup anytime from Administration Console._`;
+
+    for (const adminId of adminIds) {
+      try {
+        const inputFile = new InputFile(backupFilePath);
+        await bot.api.sendDocument(adminId, inputFile, {
+          caption,
+          parse_mode: 'Markdown',
+        });
+        sentTo.push(adminId);
+        logger.info({ adminId, backupFilePath }, 'Successfully sent database backup to admin');
+      } catch (err: any) {
+        failed.push(adminId);
+        logger.error({ adminId, err: err.message }, 'Failed to send database backup to admin');
+      }
+    }
+
+    return { sentTo, failed };
   }
 }
 

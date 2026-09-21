@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Shield,
@@ -10,6 +10,13 @@ import {
   Clock,
   PieChart,
   Folder,
+  Database,
+  Download,
+  Upload,
+  Send,
+  RefreshCw,
+  AlertTriangle,
+  FileJson,
 } from 'lucide-react';
 import {
   fetchAdminStats,
@@ -19,19 +26,36 @@ import {
   rejectAccess,
   banAccess,
   unbanAccess,
+  triggerDatabaseBackup,
+  restoreDatabaseJson,
 } from '../clientApi';
 import { StorageStats, UserRecord } from '../types';
 
 interface AdminModalProps {
   onClose: () => void;
+  onDatabaseRestored?: () => void;
 }
 
-export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
-  const [tab, setTab] = useState<'requests' | 'users' | 'storage'>('requests');
+export const AdminModal: React.FC<AdminModalProps> = ({ onClose, onDatabaseRestored }) => {
+  const [tab, setTab] = useState<'requests' | 'users' | 'storage' | 'backup_restore'>('requests');
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [pending, setPending] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // Backup & Restore state
+  const [isBackingUp, setIsBackingUp] = useState<boolean>(false);
+  const [backupStatusMessage, setBackupStatusMessage] = useState<string | null>(null);
+  const [backupErrorMessage, setBackupErrorMessage] = useState<string | null>(null);
+
+  const [restoreJsonInput, setRestoreJsonInput] = useState<string>('');
+  const [restoreSelectedFileName, setRestoreSelectedFileName] = useState<string | null>(null);
+  const [isRestoring, setIsRestoring] = useState<boolean>(false);
+  const [restoreStatusMessage, setRestoreStatusMessage] = useState<string | null>(null);
+  const [restoreErrorMessage, setRestoreErrorMessage] = useState<string | null>(null);
+  const [showRestoreConfirmModal, setShowRestoreConfirmModal] = useState<boolean>(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -75,6 +99,72 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
     loadData();
   };
 
+  const handleTriggerBackup = async () => {
+    setIsBackingUp(true);
+    setBackupStatusMessage(null);
+    setBackupErrorMessage(null);
+    try {
+      const result = await triggerDatabaseBackup();
+      setBackupStatusMessage(result.message);
+    } catch (err: any) {
+      setBackupErrorMessage(err.message || 'Failed to dispatch database backup');
+    } finally {
+      setIsBackingUp(false);
+    }
+  };
+
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setRestoreSelectedFileName(file.name);
+    setRestoreErrorMessage(null);
+    setRestoreStatusMessage(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        // Validate JSON
+        JSON.parse(text);
+        setRestoreJsonInput(text);
+      } catch (err: any) {
+        setRestoreErrorMessage(`Invalid JSON in selected file: ${err.message}`);
+      }
+    };
+    reader.onerror = () => {
+      setRestoreErrorMessage('Failed to read file contents');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExecuteRestore = async () => {
+    if (!restoreJsonInput.trim()) {
+      setRestoreErrorMessage('Please provide a backup JSON or upload a backup file');
+      return;
+    }
+
+    setIsRestoring(true);
+    setRestoreErrorMessage(null);
+    setRestoreStatusMessage(null);
+
+    try {
+      const parsed = JSON.parse(restoreJsonInput);
+      const res = await restoreDatabaseJson(parsed);
+      setRestoreStatusMessage(res.message);
+      setShowRestoreConfirmModal(false);
+      // Reload admin data and notify parent
+      await loadData();
+      if (onDatabaseRestored) {
+        onDatabaseRestored();
+      }
+    } catch (err: any) {
+      setRestoreErrorMessage(err.message || 'Failed to restore database');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-3 sm:p-6 backdrop-blur-sm">
       <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl text-slate-100 overflow-hidden">
@@ -86,7 +176,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
             </div>
             <div>
               <h3 className="text-sm sm:text-base font-semibold text-white">Administration Console</h3>
-              <p className="text-[11px] text-slate-400">Access Control & Storage Analytics</p>
+              <p className="text-[11px] text-slate-400">Access Control, Storage & Database Management</p>
             </div>
           </div>
           <button
@@ -98,10 +188,10 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-slate-800 bg-slate-950/40 px-4 sm:px-6 gap-2 pt-2">
+        <div className="flex border-b border-slate-800 bg-slate-950/40 px-4 sm:px-6 gap-2 pt-2 overflow-x-auto">
           <button
             onClick={() => setTab('requests')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition cursor-pointer ${
+            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition whitespace-nowrap cursor-pointer ${
               tab === 'requests'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -118,7 +208,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
 
           <button
             onClick={() => setTab('users')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition cursor-pointer ${
+            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition whitespace-nowrap cursor-pointer ${
               tab === 'users'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -130,7 +220,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
 
           <button
             onClick={() => setTab('storage')}
-            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition cursor-pointer ${
+            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition whitespace-nowrap cursor-pointer ${
               tab === 'storage'
                 ? 'border-blue-500 text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -138,6 +228,18 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
           >
             <HardDrive className="w-3.5 h-3.5" />
             <span>Storage Health</span>
+          </button>
+
+          <button
+            onClick={() => setTab('backup_restore')}
+            className={`flex items-center gap-1.5 pb-2.5 px-3 text-xs font-medium border-b-2 transition whitespace-nowrap cursor-pointer ${
+              tab === 'backup_restore'
+                ? 'border-blue-500 text-blue-400'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>Backup/Restore</span>
           </button>
         </div>
 
@@ -325,8 +427,231 @@ export const AdminModal: React.FC<AdminModalProps> = ({ onClose }) => {
               </div>
             </div>
           )}
+
+          {/* Backup & Restore Tab */}
+          {tab === 'backup_restore' && (
+            <div className="space-y-6 text-xs">
+              {/* Section 1: Backup Database */}
+              <div className="bg-slate-950/80 border border-slate-800 p-4 sm:p-5 rounded-xl space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <Send className="w-4 h-4 text-emerald-400" />
+                      <span>Backup Database to Admin IDs</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Generates a complete JSON snapshot of all directories, media index items, and users, then dispatches the backup file directly to all configured admin Telegram IDs.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="/api/admin/backup/download"
+                      download
+                      className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-1.5 transition"
+                      title="Direct download database JSON to your computer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Download JSON</span>
+                    </a>
+
+                    <button
+                      onClick={handleTriggerBackup}
+                      disabled={isBackingUp}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-2 transition shadow-lg shadow-emerald-950/50 cursor-pointer"
+                    >
+                      {isBackingUp ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Dispatching Backup...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Backup & Send to Admins</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {backupStatusMessage && (
+                  <div className="p-3 bg-emerald-950/40 border border-emerald-800/50 rounded-lg text-emerald-300 flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{backupStatusMessage}</span>
+                  </div>
+                )}
+
+                {backupErrorMessage && (
+                  <div className="p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-red-300 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span>{backupErrorMessage}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Restore Database */}
+              <div className="bg-slate-950/80 border border-slate-800 p-4 sm:p-5 rounded-xl space-y-4">
+                <div className="border-b border-slate-800/80 pb-3">
+                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Upload className="w-4 h-4 text-blue-400" />
+                    <span>Restore Database</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Upload or paste the backed-up database JSON. Clicking <strong>Import</strong> will validate the schema, preserve safety backups, and update the live database.
+                  </p>
+                </div>
+
+                {/* File picker button and drag zone */}
+                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".json,application/json"
+                    onChange={handleFileSelected}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    type="button"
+                    className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium flex items-center justify-center gap-2 transition cursor-pointer"
+                  >
+                    <FileJson className="w-4 h-4 text-blue-400" />
+                    <span>Select Backup JSON File</span>
+                  </button>
+
+                  {restoreSelectedFileName && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-300 text-xs">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="font-mono truncate max-w-xs">{restoreSelectedFileName}</span>
+                      <button
+                        onClick={() => {
+                          setRestoreSelectedFileName(null);
+                          setRestoreJsonInput('');
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="text-slate-500 hover:text-slate-300 ml-1"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* JSON Textarea */}
+                <div>
+                  <label className="block text-slate-300 font-medium mb-1.5">
+                    Backed Up Database JSON Content
+                  </label>
+                  <textarea
+                    rows={7}
+                    value={restoreJsonInput}
+                    onChange={(e) => {
+                      setRestoreJsonInput(e.target.value);
+                      setRestoreErrorMessage(null);
+                      setRestoreStatusMessage(null);
+                    }}
+                    placeholder={`Paste database.json content here or choose a file above...\n{\n  "version": 1,\n  "users": { ... },\n  "directories": { ... },\n  "media": { ... }\n}`}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 font-mono text-[11px] text-slate-200 placeholder-slate-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-y"
+                  />
+                </div>
+
+                {/* Import Action Button */}
+                <div className="flex items-center justify-between pt-1">
+                  <div className="text-[11px] text-slate-500">
+                    A safety snapshot of your current database will automatically be saved prior to importing.
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      if (!restoreJsonInput.trim()) {
+                        setRestoreErrorMessage('Please select a file or paste JSON before clicking Import.');
+                        return;
+                      }
+                      try {
+                        JSON.parse(restoreJsonInput);
+                        setShowRestoreConfirmModal(true);
+                      } catch (err: any) {
+                        setRestoreErrorMessage(`Invalid JSON syntax: ${err.message}`);
+                      }
+                    }}
+                    disabled={!restoreJsonInput.trim() || isRestoring}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-2 transition shadow-lg shadow-blue-950/50 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Import Database</span>
+                  </button>
+                </div>
+
+                {restoreStatusMessage && (
+                  <div className="p-3 bg-emerald-950/40 border border-emerald-800/50 rounded-lg text-emerald-300 flex items-start gap-2">
+                    <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>{restoreStatusMessage}</span>
+                  </div>
+                )}
+
+                {restoreErrorMessage && (
+                  <div className="p-3 bg-red-950/40 border border-red-800/50 rounded-lg text-red-300 flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                    <span>{restoreErrorMessage}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Confirmation Dialog for Database Restore */}
+      {showRestoreConfirmModal && (
+        <div className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-red-900/60 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <div className="p-2.5 rounded-xl bg-red-950/80 border border-red-800/50">
+                <AlertTriangle className="w-5 h-5 text-red-400" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-white text-sm">Confirm Database Restore</h4>
+                <p className="text-xs text-red-300/80">This will overwrite the current database schema.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to import this database JSON? The current database will be archived in the backups directory, and the new data will be loaded immediately.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowRestoreConfirmModal(false)}
+                disabled={isRestoring}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteRestore}
+                disabled={isRestoring}
+                className="px-4 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-medium flex items-center gap-1.5 transition cursor-pointer disabled:opacity-50"
+              >
+                {isRestoring ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Importing...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Yes, Import</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+

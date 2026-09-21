@@ -575,7 +575,12 @@ export function App() {
 
       {/* Admin Panel Modal */}
       {showAdminModal && (
-        <AdminModal onClose={() => setShowAdminModal(false)} />
+        <AdminModal
+          onClose={() => setShowAdminModal(false)}
+          onDatabaseRestored={() => {
+            loadDirectoryData();
+          }}
+        />
       )}
 
       {/* New Folder Modal */}
